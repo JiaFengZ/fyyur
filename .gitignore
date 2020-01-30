@@ -1,5 +1,6 @@
 env
 .vscode
+migrations
 __pycache__
 
 # OS generated files #
