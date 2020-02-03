@@ -71,5 +71,12 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple  # �
 ```
   $ window Command Prompt: SET FLASK_APP=app.py / window PowerShell: $env:FLASK_APP = "app.py"
   $ window Command Prompt: SET FLASK_ENV=development / window PowerShell: $env:FLASK_ENV = "development"
-  $ python -m flask run
+  $ python -m flask run FLASK_DEBUG=true
 ``
+
+
+# flask_migrate 升级数据库模型
+* 首次初始化 ```flask db init```
+* 建立迁移 ```flask db migrate -m 'xxxx' ```
+* 运行迁移 ```flask db upgrade ```
+
