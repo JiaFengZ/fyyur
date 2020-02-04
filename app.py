@@ -5,7 +5,7 @@
 import json
 import dateutil.parser
 import babel
-from flask import Flask, render_template, request, Response, flash, redirect, url_for
+from flask import Flask, render_template, request, Response, flash, jsonify, redirect, url_for
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 import logging
@@ -23,8 +23,6 @@ app = Flask(__name__)
 moment = Moment(app)
 app.config.from_object('config')
 db = SQLAlchemy(app)
-
-# connect to a local postgresql database
 migrate = Migrate(app, db)
 
 #----------------------------------------------------------------------------#
@@ -125,19 +123,6 @@ def venues():
     
   return render_template('pages/venues.html', areas=results)
 
-def is_upcoming_shows(item):
-  return item.start_time > dateutil.parser.datetime.datetime.now()
-
-def is_past_shows(item):
-  return item.start_time < dateutil.parser.datetime.datetime.now()
-
-def get_venue(item):
-  venue = {}
-  venue['id'] = item.id
-  venue['name'] = item.name
-  venue['num_upcoming_shows'] = len(list(filter(is_upcoming_shows, item.shows)))
-  return venue
-
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
   search_term = request.form.get('search_term', '')
@@ -227,8 +212,9 @@ def show_venue(venue_id):
     "past_shows_count": 1,
     "upcoming_shows_count": 1,
   }
-  data = list(filter(lambda d: d['id'] == venue_id, [data1, data2, data3]))[0]
   result = Venue.query.get(venue_id)
+  if (result == None):
+    return render_template('errors/404.html'), 404
   if (result.genres):
     result.genres = json.loads(result.genres)
   else:
@@ -239,17 +225,6 @@ def show_venue(venue_id):
   result.upcoming_shows_count = len(result.upcoming_shows)
   del result.shows
   return render_template('pages/show_venue.html', venue=result)
-
-def get_show_item(item):
-  show = {}
-  artist = Artist.query.filter(Artist.id==item.artist_id).one()
-  if (artist != None):
-    show['artist_name'] = artist.name
-    show['artist_image_link'] = artist.image_link
-  show['artist_id'] = item.artist_id
-  if (item.start_time):
-    show['start_time'] = item.start_time.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
-  return show
 
 #  Create Venue
 #  ----------------------------------------------------------------
@@ -271,7 +246,15 @@ def create_venue_submission():
     genres = json.dumps(request.form.getlist('genres'))
     facebook_link = request.form.get('facebook_link', '')
 
-    venue = Venue(name=name, genres=genres, city=city, state=state, address=address, phone=phone, facebook_link=facebook_link)
+    venue = Venue(
+      name=name,
+      genres=genres,
+      city=city,
+      state=state,
+      address=address,
+      phone=phone,
+      facebook_link=facebook_link
+    )
     db.session.add(venue)
     db.session.commit()
   except:
@@ -288,12 +271,20 @@ def create_venue_submission():
 
 @app.route('/venues/<venue_id>', methods=['DELETE'])
 def delete_venue(venue_id):
-  # TODO: Complete this endpoint for taking a venue_id, and using
-  # SQLAlchemy ORM to delete a record. Handle cases where the session commit could fail.
-
-  # BONUS CHALLENGE: Implement a button to delete a Venue on a Venue Page, have it so that
-  # clicking that button delete it from the db then redirect the user to the homepage
-  return None
+  error = False
+  try:
+    Venue.query.filter_by(id=venue_id).delete()
+    db.session.commit()
+  except:
+    db.session.rollback()
+    error = True
+  finally:
+    db.session.close()
+  if error:
+    return jsonify({ 'success': False })
+  else:
+    return jsonify({ 'success': True, 'url': '/' })
+  
 
 #  Artists
 #  ----------------------------------------------------------------
@@ -564,6 +555,30 @@ def not_found_error(error):
 @app.errorhandler(500)
 def server_error(error):
     return render_template('errors/500.html'), 500
+
+def is_upcoming_shows(item):
+  return item.start_time > dateutil.parser.datetime.datetime.now()
+
+def is_past_shows(item):
+  return item.start_time < dateutil.parser.datetime.datetime.now()
+
+def get_venue(item):
+  venue = {}
+  venue['id'] = item.id
+  venue['name'] = item.name
+  venue['num_upcoming_shows'] = len(list(filter(is_upcoming_shows, item.shows)))
+  return venue
+
+def get_show_item(item):
+  show = {}
+  artist = Artist.query.filter(Artist.id==item.artist_id).one()
+  if (artist != None):
+    show['artist_name'] = artist.name
+    show['artist_image_link'] = artist.image_link
+  show['artist_id'] = item.artist_id
+  if (item.start_time):
+    show['start_time'] = item.start_time.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+  return show
 
 
 if not app.debug:
