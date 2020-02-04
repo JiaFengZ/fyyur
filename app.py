@@ -13,6 +13,8 @@ from logging import Formatter, FileHandler
 from flask_wtf import Form
 from forms import *
 from flask_migrate import Migrate
+import json
+import sys
 #----------------------------------------------------------------------------#
 # App Config.
 #----------------------------------------------------------------------------#
@@ -41,6 +43,7 @@ class Venue(db.Model):
     phone = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
+    genres = db.Column(db.String(120))
     website = db.Column(db.String(500))
     seeking_talent = db.Column(db.Boolean(), default=False)
     seeking_description = db.Column(db.String(500))
@@ -225,7 +228,11 @@ def show_venue(venue_id):
     "upcoming_shows_count": 1,
   }
   data = list(filter(lambda d: d['id'] == venue_id, [data1, data2, data3]))[0]
-  result = Venue.query.filter(Venue.id==venue_id).one()
+  result = Venue.query.get(venue_id)
+  if (result.genres):
+    result.genres = json.loads(result.genres)
+  else:
+    result.genres = []
   result.past_shows = list(map(get_show_item, filter(is_past_shows, result.shows)))
   result.upcoming_shows = list(map(get_show_item, filter(is_upcoming_shows, result.shows)))
   result.past_shows_count = len(result.past_shows)
@@ -261,9 +268,10 @@ def create_venue_submission():
     state = request.form.get('state', '')
     address = request.form.get('address', '')
     phone = request.form.get('phone', '')
+    genres = json.dumps(request.form.getlist('genres'))
     facebook_link = request.form.get('facebook_link', '')
 
-    venue = Venue(name=name, city=city, state=state, address=address, phone=phone, facebook_link=facebook_link)
+    venue = Venue(name=name, genres=genres, city=city, state=state, address=address, phone=phone, facebook_link=facebook_link)
     db.session.add(venue)
     db.session.commit()
   except:
@@ -427,28 +435,41 @@ def edit_artist_submission(artist_id):
 
 @app.route('/venues/<int:venue_id>/edit', methods=['GET'])
 def edit_venue(venue_id):
-  form = VenueForm()
-  venue={
-    "id": 1,
-    "name": "The Musical Hop",
-    "genres": ["Jazz", "Reggae", "Swing", "Classical", "Folk"],
-    "address": "1015 Folsom Street",
-    "city": "San Francisco",
-    "state": "CA",
-    "phone": "123-123-1234",
-    "website": "https://www.themusicalhop.com",
-    "facebook_link": "https://www.facebook.com/TheMusicalHop",
-    "seeking_talent": True,
-    "seeking_description": "We are on the lookout for a local artist to play every two weeks. Please call us.",
-    "image_link": "https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60"
-  }
-  # TODO: populate form with values from venue with ID <venue_id>
+  venue = Venue.query.get(venue_id)
+  form = VenueForm(
+    name=venue.name,
+    genres=json.loads(venue.genres),
+    city=venue.city,
+    state=venue.state,
+    address=venue.address,
+    phone=venue.phone,
+    facebook_link=venue.facebook_link
+  )
   return render_template('forms/edit_venue.html', form=form, venue=venue)
 
 @app.route('/venues/<int:venue_id>/edit', methods=['POST'])
 def edit_venue_submission(venue_id):
-  # TODO: take values from the form submitted, and update existing
-  # venue record with ID <venue_id> using the new attributes
+  error = False
+  try:
+    venue = Venue.query.get(venue_id)
+    venue.name = request.form.get('name', '')
+    venue.city = request.form.get('city', '')
+    venue.state = request.form.get('state', '')
+    venue.address = request.form.get('address', '')
+    venue.phone = request.form.get('phone', '')
+    venue.genres = json.dumps(request.form.getlist('genres'))
+    venue.facebook_link = request.form.get('facebook_link', '')
+    db.session.commit()
+  except:
+    error = True
+    db.session.rollback()
+    print(sys.exc_info())
+  finally:
+    db.session.close()
+  if error:
+    flash('An error occurred. Venue ' + request.form['name'] + ' could not be updated.')
+  else:
+    flash('Venue ' + request.form['name'] + ' was successfully updated!')
   return redirect(url_for('show_venue', venue_id=venue_id))
 
 #  Create Artist
